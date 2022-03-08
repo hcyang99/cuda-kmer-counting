@@ -1,7 +1,7 @@
 #pragma once
 #include "utils/utils.cuh"
 
-using utils::byte_32;
+using utils::Compressed128Mer;
 
 /**
  * @brief Common abstract base class for GPU hashtables
@@ -24,5 +24,5 @@ class GpuHashtable
      * @param empty_status Value residing in shared memory, for empty status of 14 sub-warps
      * @return SUCCESS: increment complete; INSERT: try insertion; PROBE: no free space found in current SIMD window
      */
-    ProbeStatus simd_probe(uint32_t* data, byte_32& key, uint32_t* match_status, uint32_t* empty_status);
+    ProbeStatus simd_probe(uint32_t* data, const Compressed128Mer& key, uint32_t* match_status, uint32_t* empty_status);
 };

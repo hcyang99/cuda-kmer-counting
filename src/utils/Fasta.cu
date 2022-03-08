@@ -1,5 +1,5 @@
-#include "fasta/fasta.cuh"
-#include "utils/utils.cuh"
+#include "Fasta.cuh"
+#include "utils.cuh"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
