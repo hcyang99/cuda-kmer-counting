@@ -37,25 +37,23 @@ using utils::byte_32;
 using utils::byte_4;
 
 __device__ __forceinline__
-byte_4 compress(const byte_32& in)
+uint32_t compress16(char* s)
 {
-    byte_4 result = byte_4();
-    
-    for (uint32_t i = 0; i < 16; ++i)
+    uint32_t result = 0;
+    uint32_t shift = 0;
+    for (int i = 0; i < 16; ++i)
     {
-        uint8_t curr;
-        switch (in.c[i])
+        uint32_t twoBitVal;
+        switch(s[i]) 
         {
-            case 'A': curr = 0; break;
-            case 'C': curr = 1; break;
-            case 'G': curr = 2; break;
-            default: curr = 3; break;
+            case 'A': twoBitVal = 0; break;
+            case 'C': twoBitVal = 1; break;
+            case 'G': twoBitVal = 2; break;
+            default: twoBitVal = 3; break;
         }
-        uint32_t byte_idx = i / 4;
-        uint32_t shift = (3 - i % 4) * 2;
-        result.c[byte_idx] |= curr << shift;
+        result |= (twoBitVal << shift);
+        shift += 2;
     }
-
     return result;
 }
 
@@ -68,16 +66,8 @@ __global__
 void compressKernel(uint32_t* dst, uint32_t* src)
 {
     char* src_char = reinterpret_cast<char*>(src);
-
     int tx = utils::global_thread_id();
-
-    byte_32 in;
-    for (uint32_t i = 0; i < 4; ++i)
-    {
-        in.u32[i] = src[tx * 4 + i];
-    }
-    byte_4 result = compress(in);
-    dst[tx] = result.u32;
+    dst[tx] = compress16(src_char + 16 * tx);
 }
 
 __host__

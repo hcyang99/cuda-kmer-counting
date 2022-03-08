@@ -41,5 +41,24 @@ namespace utils
 
     using Compressed128Mer = byte_32;
 
+    /**
+     * @brief Load Compressed128Mer from global string
+     * @param data global string
+     * @param offset
+     * @param out the 128Mer
+     */
+    __device__ __forceinline__
+    void Read128Mer(uint32_t* data, uint32_t offset, Compressed128Mer& out)
+    {
+        int tx = threadIdx.x;
+        if (tx < 8)
+        {
+            uint32_t index = offset / 16 + tx;
+            uint32_t shift_1 = offset % 16 * 2;
+            uint32_t shift_2 = (16 - shift_1) * 2;
+            out.u32[tx] = (data[index] >> shift_1) | (data[index + 1] << shift_2);
+        }
+        __syncthreads();
+    }
 }
 

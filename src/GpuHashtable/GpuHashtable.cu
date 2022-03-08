@@ -1,7 +1,7 @@
 #include "GpuHashtable.cuh"
 
 __device__
-GpuHashtable::ProbeStatus GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key, uint32_t* match_status, uint32_t* empty_status)
+void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
 {
     int tx = threadIdx.x;
     int subwarp_idx = tx / 14;  // 14 (32B key, 4B value) pairs
@@ -28,26 +28,72 @@ GpuHashtable::ProbeStatus GpuHashtable::simd_probe(uint32_t* data, const Compres
     if (tx >= 0 && tx < 14)
     {
         match_status[14] = __ballot_sync(__activemask(), match_status[tx]);
+        empty_status[14] = __ballot_sync(__activemask(), empty_status[tx]);
     }
-    else if (tx >= 32 && tx < 32 + 14)
+
+    if (tx == 0)
     {
-        empty_status[14] = __ballot_sync(__activemask(), empty_status[tx - 32]);
+        int match_sub_block = __ffs(match_status[14]) - 1;
+        int empty_sub_block = __ffs(empty_status[14]) - 1;
+        if (match_sub_block >= 0)
+        {
+            // match found, incrementing
+            // deletions from hashtables not implemented
+            int offset = 9 * match_sub_block + 8;
+            atomicAdd(data + offset, 1UL);
+            status = ProbeStatus::SUCCEESS;
+        }
+        else if (empty_sub_block >= 0)
+            status = ProbeStatus::INSERT;
+        else 
+            status = ProbeStatus::PROBE_NEXT;
     }
     __syncthreads();
+}
 
+__device__ 
+uint32_t GpuHashtable::hash(const Compressed128Mer& key)
+{
+    const uint32_t c1 = 0xcc9e2d51UL;
+    const uint32_t c2 = 0x1b873593UL;
+    const uint32_t r1 = 15UL;
+    const uint32_t r2 = 13UL;
+    const uint32_t m = 5UL;
+    const uint32_t n = 0xe6546b64UL;
 
-    int match_sub_block = __ffs(match_status[14]) - 1;
-    int empty_sub_block = __ffs(empty_status[14]) - 1;
-    if (tx == 0 && match_sub_block >= 0)
+    uint32_t hash = 0x6789fUL;  // seed
+    for (int i = 0; i < 8; ++i)
     {
-        // match found, incrementing
-        // deletions from hashtables not implemented
-        int offset = 9 * match_sub_block + 8;
-        atomicAdd(data + offset, 1UL);
+        uint32_t k = key.u32[i];
+        k *= c1;
+        k >>= r1;
+        k *= c2;
+
+        hash ^= k;
+        hash >>= r2;
+        hash = hash * m + n;
     }
-    if (match_sub_block >= 0)
-        return ProbeStatus::SUCCEESS;
-    if (empty_sub_block >= 0)
-        return ProbeStatus::INSERT;
-    return ProbeStatus::PROBE;
+
+    hash ^= 128UL;
+    hash = hash ^ (hash >> 16UL);
+    hash *= 0x85ebca6bUL;
+    hash = hash ^ (hash >> 13UL);
+    hash *= 0xc2b2ae35UL;
+    hash = hash ^ (hash >> 16UL);
+    return hash;
+}
+
+__device__
+void GpuHashtable::get_job_batch()
+{
+    uint32_t start = job_queue->dispatch();
+    uint32_t size = job_queue->dispatch_size;
+    uint32_t end = start + size;
+    if (end > job_queue->total_jobs)
+        end = job_queue->total_jobs;
+    if (start >= job_queue->total_jobs)
+        start = 0xFFFFFFFFUL;   // Flag to exit
+    
+    job_begin = start;
+    job_end = end;
 }

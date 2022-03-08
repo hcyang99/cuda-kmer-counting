@@ -1,4 +1,5 @@
 #include "SlabHash.cuh"
+#include "assert.h"
 
 __device__
 void SlabHash::get_new_pool(uint32_t seed)
@@ -56,5 +57,121 @@ void SlabHash::allocate_slab(uint32_t seed)
             new_slab = mem_pool->allocate();
         }
         __syncthreads();
+    }
+}
+
+__device__
+void SlabHash::process(const Compressed128Mer& key)
+{
+    int tx = threadIdx.x;
+
+    if (tx == 0)
+    {
+        uint32_t h = hash(key);
+        probe_pos = h % num_buckets * 128;
+        status = ProbeStatus::PROBE_CURRENT;
+    }
+    __syncthreads();
+
+    while (true)
+    {
+        if (status == ProbeStatus::PROBE_CURRENT)
+            simd_probe(data + probe_pos, key);
+        if (status == ProbeStatus::SUCCEESS)
+            return;
+        else if (status == ProbeStatus::INSERT)
+        {
+            // try insertion  
+            if (tx == 0)
+            {
+                int empty_sub_block = __ffs(empty_status[14]) - 1;
+                int offset = 9 * empty_sub_block + 8;
+                if (atomicCAS(data + probe_pos + offset, 0UL, 1UL) == 0)
+                {
+                    // sucessfully occupied the empty entry, copying keys
+                    for (int i = 0; i < 8; ++i)
+                        data[probe_pos + 9 * empty_sub_block + i] = key.u32[i];
+                    status = ProbeStatus::SUCCEESS;
+                }
+                else 
+                {
+                    // insertion failed
+                    status = ProbeStatus::PROBE_CURRENT;
+                }
+            }
+            __syncthreads();
+        }
+        else if (status == ProbeStatus::PROBE_NEXT)
+        {
+            // no empty space in current slab
+            uint32_t** next_ptr = reinterpret_cast<uint32_t**>(data + probe_pos + 126);
+            uint32_t* next = *next_ptr; // the "next" pointer
+            if (next)
+            {
+                if (tx == 0)
+                {
+                    probe_pos = next - data;
+                    status = ProbeStatus::PROBE_CURRENT;
+                }
+                __syncthreads();
+            } 
+            else 
+            {
+                // try to allocate new slab
+                if (new_slab == nullptr)    // don't allocate if previous is unused
+                    allocate_slab(key.u32[3]);
+                
+                if (tx == 0)
+                {
+                    // writes key, value into head of new slab
+                    for (int i = 0; i < 8; ++i)
+                        new_slab[i] = key.u32[i];
+                    new_slab[8] = 1UL;
+
+                    // tries to append `new_slab` to end of current slab
+                    uint32_t* old_next = (uint32_t*)atomicCAS((unsigned long long*)next_ptr, 0ULL, (uint64_t)next_ptr);
+                    if (old_next == nullptr)
+                    {
+                        // slab insertion success
+                        new_slab = nullptr;
+                        status = ProbeStatus::SUCCEESS;
+                    }
+                    else 
+                    {
+                        // slab insertion failed
+                        probe_pos = old_next - data;
+                        status = ProbeStatus::PROBE_CURRENT;
+                    }
+                }
+                __syncthreads();
+            }
+        }
+        else 
+        {
+            assert(0);  // should not reach here
+        }
+    }
+}
+
+__device__
+void SlabHash::run()
+{
+    int tx = threadIdx.x;
+
+    while (true)
+    {
+        if (tx == 0)
+            get_job_batch();
+        __syncthreads();
+
+        if (job_begin >= job_end)
+            break;  // no job to do
+        
+        for (uint32_t i = job_begin; i < job_end; ++i)
+        {
+            utils::Read128Mer(data, i, current_key);
+            Compressed128Mer key = current_key;
+            process(key);
+        }
     }
 }

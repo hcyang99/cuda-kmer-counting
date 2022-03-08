@@ -9,17 +9,12 @@
 class SlabHash : public GpuHashtable
 {
     public:
-    SlabHash(uint32_t* d, JobQueue* j, SlabPool* all_pools, SlabPool* own_pool)
-        :data(d), job_queue(j), all_slab_pools(all_pools), mem_pool(own_pool), new_slab(nullptr) {}
+    SlabHash(uint32_t* d, uint32_t n, JobQueue* j, SlabPool* all_pools, SlabPool* own_pool)
+        :GpuHashtable(d, n, j), all_slab_pools(all_pools), mem_pool(own_pool), new_slab(nullptr) {}
 
-    /**
-     * @brief Insert/increment the key in hashtable
-     */
-    void process(const Compressed128Mer& key);
+    void run();
 
     protected:
-    uint32_t* const data;
-    JobQueue* const job_queue;
     SlabPool* const all_slab_pools; // Array of all Slab pools
     SlabPool* mem_pool;             // Current memory pool allocating from; Initally self, when full, some other block's pool
     uint32_t* new_slab;
@@ -35,5 +30,10 @@ class SlabHash : public GpuHashtable
      * @param seed Seed for random pool selection
      */
     void allocate_slab(uint32_t seed);
+
+    /**
+     * @brief Insert/increment the key in hashtable
+     */
+    void process(const Compressed128Mer& key);
 };
 
