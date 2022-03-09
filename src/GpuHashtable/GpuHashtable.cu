@@ -25,16 +25,19 @@ void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
         }
     __syncthreads();
 
+    uint32_t match_mask, empty_mask;
     if (tx >= 0 && tx < 14)
     {
-        match_status[14] = __ballot_sync(__activemask(), match_status[tx]);
-        empty_status[14] = __ballot_sync(__activemask(), empty_status[tx]);
+        match_mask = __ballot_sync(__activemask(), match_status[tx]);
+        empty_mask = __ballot_sync(__activemask(), empty_status[tx]);
     }
 
     if (tx == 0)
     {
-        int match_sub_block = __ffs(match_status[14]) - 1;
-        int empty_sub_block = __ffs(empty_status[14]) - 1;
+        match_status[14] = match_mask;
+        empty_status[14] = empty_mask;
+        int match_sub_block = __ffs(match_mask) - 1;
+        int empty_sub_block = __ffs(empty_mask) - 1;
         if (match_sub_block >= 0)
         {
             // match found, incrementing
@@ -44,9 +47,20 @@ void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
             status = ProbeStatus::SUCCEESS;
         }
         else if (empty_sub_block >= 0)
-            status = ProbeStatus::INSERT;
+        {
+            // match not found, try insertion to available space
+            if (try_insert(data + 9 * empty_sub_block, key))
+            {
+                status = ProbeStatus::SUCCEESS;
+            }
+            else 
+            {
+                // insertion failed; probe current window again
+                status = ProbeStatus::PROBE_CURRENT;
+            }
+        } 
         else 
-            status = ProbeStatus::PROBE_NEXT;
+            status = ProbeStatus::PROBE_NEXT;   // no match or space; goto next window
     }
     __syncthreads();
 }
@@ -96,4 +110,44 @@ void GpuHashtable::get_job_batch()
     
     job_begin = start;
     job_end = end;
+}
+
+__device__
+void GpuHashtable::run()
+{
+    int tx = threadIdx.x;
+
+    while (true)
+    {
+        if (tx == 0)
+            get_job_batch();
+        __syncthreads();
+
+        if (job_begin >= job_end)
+            break;  // no job to do
+        
+        for (uint32_t i = job_begin; i < job_end; ++i)
+        {
+            utils::Read128Mer(data, i, current_key);
+            Compressed128Mer key = current_key;
+            process(key);
+        }
+    }
+}
+
+__device__ __forceinline__
+bool GpuHashtable::try_insert(uint32_t* kv_pair, const Compressed128Mer& key)
+{
+    if (atomicCAS(kv_pair + 8, 0UL, 1UL) == 0)
+    {
+        // sucessfully occupied the empty entry, copying keys
+        for (int i = 0; i < 8; ++i)
+            kv_pair[i] = key.u32[i];
+        return true;
+    }
+    else 
+    {
+        // insertion failed
+        return false;
+    }
 }

@@ -68,7 +68,7 @@ void SlabHash::process(const Compressed128Mer& key)
     if (tx == 0)
     {
         uint32_t h = hash(key);
-        probe_pos = h % num_buckets * 128;
+        probe_pos = data + h % num_buckets * 128;
         status = ProbeStatus::PROBE_CURRENT;
     }
     __syncthreads();
@@ -76,41 +76,19 @@ void SlabHash::process(const Compressed128Mer& key)
     while (true)
     {
         if (status == ProbeStatus::PROBE_CURRENT)
-            simd_probe(data + probe_pos, key);
+            simd_probe(probe_pos, key);
         if (status == ProbeStatus::SUCCEESS)
             return;
-        else if (status == ProbeStatus::INSERT)
-        {
-            // try insertion  
-            if (tx == 0)
-            {
-                int empty_sub_block = __ffs(empty_status[14]) - 1;
-                int offset = 9 * empty_sub_block + 8;
-                if (atomicCAS(data + probe_pos + offset, 0UL, 1UL) == 0)
-                {
-                    // sucessfully occupied the empty entry, copying keys
-                    for (int i = 0; i < 8; ++i)
-                        data[probe_pos + 9 * empty_sub_block + i] = key.u32[i];
-                    status = ProbeStatus::SUCCEESS;
-                }
-                else 
-                {
-                    // insertion failed
-                    status = ProbeStatus::PROBE_CURRENT;
-                }
-            }
-            __syncthreads();
-        }
         else if (status == ProbeStatus::PROBE_NEXT)
         {
             // no empty space in current slab
-            uint32_t** next_ptr = reinterpret_cast<uint32_t**>(data + probe_pos + 126);
+            uint32_t** next_ptr = reinterpret_cast<uint32_t**>(probe_pos + 126);
             uint32_t* next = *next_ptr; // the "next" pointer
             if (next)
             {
                 if (tx == 0)
                 {
-                    probe_pos = next - data;
+                    probe_pos = next;
                     status = ProbeStatus::PROBE_CURRENT;
                 }
                 __syncthreads();
@@ -139,7 +117,7 @@ void SlabHash::process(const Compressed128Mer& key)
                     else 
                     {
                         // slab insertion failed
-                        probe_pos = old_next - data;
+                        probe_pos = old_next;
                         status = ProbeStatus::PROBE_CURRENT;
                     }
                 }
@@ -153,25 +131,3 @@ void SlabHash::process(const Compressed128Mer& key)
     }
 }
 
-__device__
-void SlabHash::run()
-{
-    int tx = threadIdx.x;
-
-    while (true)
-    {
-        if (tx == 0)
-            get_job_batch();
-        __syncthreads();
-
-        if (job_begin >= job_end)
-            break;  // no job to do
-        
-        for (uint32_t i = job_begin; i < job_end; ++i)
-        {
-            utils::Read128Mer(data, i, current_key);
-            Compressed128Mer key = current_key;
-            process(key);
-        }
-    }
-}
