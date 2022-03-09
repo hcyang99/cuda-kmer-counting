@@ -44,7 +44,9 @@ class GpuHashtable
     /**
      * @brief Calculates the hash of the key (Murmur Hash)
      */
-    uint32_t hash(const Compressed128Mer& key);
+    uint32_t hash(const Compressed128Mer& key) const;
+
+    uint32_t hash(uint32_t value) const;
 
     /**
      * @brief Probe single SIMD window (512 B), do increment/insertion if possible, Assuming 128 threads.
@@ -63,7 +65,7 @@ class GpuHashtable
     bool try_insert(uint32_t* kv_pair, const Compressed128Mer& key);
 
     /**
-     * @brief Insert/increment the key in hashtable; DUMMY: must be overriden
+     * @brief Insert/increment the key in hashtable
      */
-    void process(const Compressed128Mer& key) {}
+    virtual void process(const Compressed128Mer& key) = 0;
 };

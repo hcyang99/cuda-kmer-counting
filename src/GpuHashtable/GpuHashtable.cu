@@ -66,7 +66,7 @@ void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
 }
 
 __device__ 
-uint32_t GpuHashtable::hash(const Compressed128Mer& key)
+uint32_t GpuHashtable::hash(const Compressed128Mer& key) const
 {
     const uint32_t c1 = 0xcc9e2d51UL;
     const uint32_t c2 = 0x1b873593UL;
@@ -94,6 +94,37 @@ uint32_t GpuHashtable::hash(const Compressed128Mer& key)
     hash = hash ^ (hash >> 13UL);
     hash *= 0xc2b2ae35UL;
     hash = hash ^ (hash >> 16UL);
+    return hash;
+}
+
+__device__
+uint32_t GpuHashtable::hash(uint32_t value) const
+{
+    const uint32_t c1 = 0xcc9e2d51UL;
+    const uint32_t c2 = 0x1b873593UL;
+    const uint32_t r1 = 15UL;
+    const uint32_t r2 = 13UL;
+    const uint32_t m = 5UL;
+    const uint32_t n = 0xe6546b64UL;
+
+    uint32_t hash = 0x64859ecUL;  // seed   
+
+    uint32_t k = value;
+    k *= c1;
+    k >>= r1;
+    k *= c2;
+
+    hash ^= k;
+    hash >>= r2;
+    hash = hash * m + n;
+
+    hash ^= 4UL;
+    hash = hash ^ (hash >> 16UL);
+    hash *= 0x85ebca6bUL;
+    hash = hash ^ (hash >> 13UL);
+    hash *= 0xc2b2ae35UL;
+    hash = hash ^ (hash >> 16UL);
+
     return hash;
 }
 

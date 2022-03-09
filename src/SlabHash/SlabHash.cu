@@ -77,7 +77,7 @@ void SlabHash::process(const Compressed128Mer& key)
     {
         if (status == ProbeStatus::PROBE_CURRENT)
             simd_probe(probe_pos, key);
-        if (status == ProbeStatus::SUCCEESS)
+        else if (status == ProbeStatus::SUCCEESS)
             return;
         else if (status == ProbeStatus::PROBE_NEXT)
         {

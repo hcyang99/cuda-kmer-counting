@@ -32,6 +32,6 @@ class SlabHash : public GpuHashtable
     /**
      * @brief Insert/increment the key in SlabHash
      */
-    void process(const Compressed128Mer& key);
+    virtual void process(const Compressed128Mer& key) override;
 };
 
