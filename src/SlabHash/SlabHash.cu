@@ -1,4 +1,4 @@
-#include "SlabHash.cuh"
+#include "SlabHash/SlabHash.cuh"
 #include "assert.h"
 
 __device__

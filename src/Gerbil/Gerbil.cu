@@ -1,4 +1,4 @@
-#include "Gerbil.cuh"
+#include "Gerbil/Gerbil.cuh"
 #include <assert.h>
 
 __device__

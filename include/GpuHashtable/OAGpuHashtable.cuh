@@ -1,5 +1,5 @@
 #pragma once
-#include "GpuHashtable.cuh"
+#include "GpuHashtable/GpuHashtable.cuh"
 
 /**
  * @brief Abstract base class for open-addressing GPU hashtables
@@ -7,8 +7,8 @@
 class OAGpuHashtable : public GpuHashtable
 {
     protected:
-    OAGpuHashtable(uint32_t* d, uint32_t n, JobQueue* j)
-        :GpuHashtable(d, n, j) {}
+    OAGpuHashtable(uint32_t* ref, uint32_t* d, uint32_t n, JobQueue* j)
+        :GpuHashtable(ref, d, n, j) {}
     
     
     /**

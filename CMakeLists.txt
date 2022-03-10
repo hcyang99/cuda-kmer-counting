@@ -1,19 +1,29 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(seedTable-build)
+project(cuda-gpu-hashtable)
 
 set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
-find_package(CUDA 10.0 REQUIRED)
+find_package(CUDA 10.2 REQUIRED)
 
-project(xact-build LANGUAGES CXX CUDA)
+project(xact-build LANGUAGES CUDA)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O4 -std=c++17 -Wall -g")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_52")
+set(CMAKE_CUDA_ARCHITECTURES 70)
+set(CMAKE_CUDA_FLAGS "${NVCC_COMPILE_FLAGS} -dlto")
+add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:-dc>")
 
-add_executable (seedTable
-    src/seedTable.cu
-    src/twoBitCompressor.cpp
-    src/main.cpp)
 
-target_link_libraries(seedTable)
+include_directories(${PROJECT_SOURCE_DIR}/include)
+
+add_executable (slab
+    src/benchmarks/slab.cu
+    src/benchmarks/HashtableWalker.cu 
+    src/benchmarks/Stats.cu 
+    src/GpuHashtable/GpuHashtable.cu 
+    src/SlabHash/SlabHash.cu 
+    src/SlabHash/SlabPool.cu 
+    src/utils/Fasta.cu 
+    src/utils/JobQueue.cu
+    )
+
+target_link_libraries(slab)
 

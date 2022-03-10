@@ -1,4 +1,4 @@
-#include "WarpCore.cuh"
+#include "WarpCore/WarpCore.cuh"
 #include <assert.h>
 
 __device__

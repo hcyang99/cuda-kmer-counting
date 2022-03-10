@@ -1,5 +1,5 @@
-#include "Fasta.cuh"
-#include "utils.cuh"
+#include "utils/Fasta.cuh"
+#include "utils/utils.cuh"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -36,7 +36,7 @@ Fasta::Fasta(string path)
 using utils::byte_32;
 using utils::byte_4;
 
-__device__ __forceinline__
+__device__ 
 uint32_t compress16(char* s)
 {
     uint32_t result = 0;

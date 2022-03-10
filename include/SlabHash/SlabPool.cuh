@@ -7,19 +7,19 @@
 class SlabPool
 {
     public:
-    SlabPool(uint32_t* buf, uint32_t sz)
+    __device__ SlabPool(uint32_t* buf, uint32_t sz)
         : mem(buf), mem_pool_head(0), mem_pool_size(sz) {}
 
     /**
      * @brief Thread-safely allocates Slabs (memory chunks of 512 B); should only be called in thread 0 of each block
      * @return pointer to newly allocated slab; nullptr at failure
      */
-    uint32_t* allocate();
+    __device__ uint32_t* allocate();
 
     /**
      * @return True if current pool is full
      */
-    bool full() const;
+    __device__ bool full() const;
 
     protected:
     uint32_t* mem;              // Pool's buffer

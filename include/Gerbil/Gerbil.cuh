@@ -9,8 +9,8 @@
 class Gerbil : public OAGpuHashtable
 {
     public:
-    Gerbil(uint32_t* d, uint32_t n, JobQueue* j, uint32_t max_trials, FailureZone<Compressed128Mer>* f_zone)
-        : OAGpuHashtable(d, n, j), max_attempts(max_trials), failure_zone(f_zone) {}
+    Gerbil(uint32_t* ref, uint32_t* d, uint32_t n, JobQueue* j, uint32_t max_trials, FailureZone<Compressed128Mer>* f_zone)
+        : OAGpuHashtable(ref, d, n, j), max_attempts(max_trials), failure_zone(f_zone) {}
 
     protected:
     const uint32_t max_attempts;

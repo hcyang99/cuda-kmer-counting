@@ -7,8 +7,8 @@
 class WarpCore : public OAGpuHashtable
 {
     public:
-    WarpCore(uint32_t* d, uint32_t n, JobQueue* j)
-        :OAGpuHashtable(d, n, j) {}
+    WarpCore(uint32_t* ref, uint32_t* d, uint32_t n, JobQueue* j)
+        :OAGpuHashtable(ref, d, n, j) {}
     
     protected:
     /**

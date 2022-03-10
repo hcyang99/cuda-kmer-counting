@@ -1,5 +1,6 @@
-#include "HashtableWalker.cuh"
+#include "benchmarks/HashtableWalker.cuh"
 
+__device__
 void HashtableWalker::process_window(uint32_t* window)
 {
     int tx = threadIdx.x;
@@ -58,4 +59,32 @@ void HashtableWalker::run()
 
     // merge block stats to the global stat
     *global_stats += block_stats;
+}
+
+__global__
+void hashtable_walk_kernel(uint32_t* table, Stats* global_stats, JobQueue* j)
+{
+    __shared__ uint32_t s[1024];
+
+    HashtableWalker* h_ptr = (HashtableWalker*)s;
+
+    int tx = threadIdx.x;
+    if (tx == 0)
+    {
+        new (h_ptr) HashtableWalker(table, global_stats, j);
+    }
+    __syncthreads();
+
+    h_ptr->run();
+}
+
+__host__
+void hashtable_walk(uint32_t* table, uint32_t num_buckets, uint32_t* out)
+{
+    JobQueue* d_jobs = new_job(num_buckets, utils::batchSize());
+    Stats* d_stats = new_stats();
+    hashtable_walk_kernel<<<utils::gridSize(), 32>>>(table, d_stats, d_jobs);
+    CUDA_CHECK_ERROR(cudaMemcpy(out, (uint32_t*)d_stats, 128 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+    cudaFree(d_jobs);
+    cudaFree(d_stats);
 }

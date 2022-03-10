@@ -1,4 +1,4 @@
-#include "GpuHashtable.cuh"
+#include "GpuHashtable/GpuHashtable.cuh"
 
 __device__
 void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
@@ -159,14 +159,14 @@ void GpuHashtable::run()
         
         for (uint32_t i = job_begin; i < job_end; ++i)
         {
-            utils::Read128Mer(data, i, current_key);
+            utils::Read128Mer(reference, i, current_key);
             Compressed128Mer key = current_key;
             process(key);
         }
     }
 }
 
-__device__ __forceinline__
+__device__ 
 bool GpuHashtable::try_insert(uint32_t* kv_pair, const Compressed128Mer& key)
 {
     if (atomicCAS(kv_pair + 8, 0UL, 1UL) == 0)
