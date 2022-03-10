@@ -8,14 +8,13 @@ find_package(CUDA 10.2 REQUIRED)
 project(xact-build LANGUAGES CUDA)
 
 set(CMAKE_CUDA_ARCHITECTURES 70)
-# set(CMAKE_CUDA_FLAGS "${NVCC_COMPILE_FLAGS} -dlto")
 add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:-dc>")
 
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
 add_executable (slab
-    src/benchmarks/slab.cu
+    src/slab.cu
     )
 
 target_link_libraries(slab)
