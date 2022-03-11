@@ -55,7 +55,10 @@ Stats& Stats::operator+=(const Stats& other)
         }
     }
     for (int i = tx; i < 128; i += bs)
-        buckets[tx] += other.buckets[tx];
+        buckets[i] += other.buckets[i];
+    
+    __syncthreads();
+
     if (tx == 0)
         lock = 0;   // unlock
     return *this;

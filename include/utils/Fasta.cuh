@@ -34,15 +34,17 @@ Fasta::Fasta(std::string path)
         throw std::runtime_error("Cannot open file");
     
     std::string line;
-    do 
+    std::getline(f, line);
+    while (true)
     {
         std::getline(f, line);
         if (line.size() != 0 && line[0] != '>' && line[0] != ';')
-        {
+        {   
             this->buffer += line;
         }
-    } 
-    while(!f.eof() && !(line.size() != 0 && line[0] == '>'));
+        if (f.eof() || (line.size() != 0 && line[0] == '>'))
+            break;
+    }
     f.close();
 
     this->sz = buffer.size();
@@ -100,8 +102,7 @@ uint32_t* Fasta::toGpuCompressed()
     CUDA_CHECK_ERROR(cudaMalloc(&d_compressed, this->buffer.size() / 4));
     CUDA_CHECK_ERROR(cudaMemcpy(d_buf, &this->buffer[0], this->buffer.size(), cudaMemcpyHostToDevice));
 
-    compressKernel<<<this->buffer.size() / 16, utils::blockSize()>>>
-    (d_compressed, d_buf);
+    compressKernel<<<this->buffer.size() / 4 / utils::blockSize(), utils::blockSize()>>>(d_compressed, d_buf);
 
     cudaFree(d_buf);
     this->buffer.clear();
