@@ -6,7 +6,7 @@ using namespace std;
 __global__ 
 void slab_kernel(uint32_t* ref, uint32_t* d, uint32_t n, JobQueue* j, SlabPool* all_pools)
 {
-    __shared__ uint32_t s[1024];
+    __shared__ char s[sizeof(SlabHash)];
     int tx = threadIdx.x;
     int bx = blockIdx.x;
 

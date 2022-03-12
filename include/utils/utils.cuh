@@ -55,6 +55,17 @@ namespace utils
         uint32_t u32[8];
 
         __device__ byte_32() : u32() {}
+
+        __device__
+        bool operator==(const byte_32& other) const
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                if (u32[i] != other.u32[i])
+                    return false;
+            }
+            return true;
+        }
     };
 
     union byte_4

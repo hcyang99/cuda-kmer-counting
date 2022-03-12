@@ -6,7 +6,7 @@ using namespace std;
 __global__ 
 void warp_core_kernel(uint32_t* ref, uint32_t* d, uint32_t n, JobQueue* j)
 {
-    __shared__ uint32_t s[1024];
+    __shared__ char s[sizeof(WarpCore)];
     int tx = threadIdx.x;
 
     WarpCore* h = (WarpCore*) s;

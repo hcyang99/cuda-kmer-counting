@@ -11,6 +11,8 @@ cd build
 cmake ..
 make 
 cd .. 
-# cuda-memcheck ./build/wc
-./build/slab
-./build/wc
+# cuda-memcheck ./build/gerbil
+
+# ./build/wc
+# ./build/slab
+./build/gerbil
