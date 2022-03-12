@@ -24,8 +24,11 @@ class GpuHashtable
 
     ProbeStatus status;
     uint32_t* probe_pos;
-    uint32_t match_status[15];  // Value residing in shared memory, for matching status of 14 sub-warps
-    uint32_t empty_status[15];  // Value residing in shared memory, for empty status of 14 sub-warps
+    uint32_t match_status[15];          // Indicates matches of 14 sub-warps
+    uint32_t empty_status[15];          // Value residing in shared memory, for empty status of 14 sub-warps
+    uint32_t zero_status[15];           // Indicates if each key in the table contains a 32-bit zero segment
+    uint32_t lock_status[15];           // Indicates if key-value pairs in table are locked (value == 0xFFFFFFFFU)
+    // Note: if zero_status[i] && lock_status[i] evalucates into true for any 0 <= i < 14, current window should be probed again
 
     Compressed128Mer current_key;
 
@@ -60,7 +63,7 @@ class GpuHashtable
      * @param key The query key
      * @return 
      */
-    __device__ void simd_probe(uint32_t* window, const Compressed128Mer& key);
+    __device__ void simd_probe(volatile uint32_t* window, const Compressed128Mer& key);
 
     /**
      * @brief Tries to insert new key into hashtable; should only be called from thread 0 of each block
@@ -77,7 +80,7 @@ class GpuHashtable
 
 
 __device__
-void GpuHashtable::simd_probe(uint32_t* window, const Compressed128Mer& key)
+void GpuHashtable::simd_probe(volatile uint32_t* window, const Compressed128Mer& key)
 {
     int tx = threadIdx.x;
     int subwarp_idx = tx / 9;  // 14 (32B key, 4B value) pairs
@@ -87,6 +90,7 @@ void GpuHashtable::simd_probe(uint32_t* window, const Compressed128Mer& key)
         if (sub_tx == 0)   
         {
             match_status[subwarp_idx] = 1;  // initialize as matched
+            zero_status[subwarp_idx] = 0;
         }
     }
         
@@ -94,25 +98,33 @@ void GpuHashtable::simd_probe(uint32_t* window, const Compressed128Mer& key)
 
     if (tx < 126)
     {
+        uint32_t curr_segment = window[tx];
         if (sub_tx != 8)
         {
-            if (window[tx] != key.u32[sub_tx])
+            if (curr_segment != key.u32[sub_tx])
             {
                 match_status[subwarp_idx] = 0;  // set to 0 if not matching
+            }
+            if (curr_segment == 0)
+            {
+                zero_status[subwarp_idx] = 1;
             }
         }
         else
         {
-            empty_status[subwarp_idx] = window[tx] == 0 ? 1UL : 0;
+            empty_status[subwarp_idx] = curr_segment == 0 ? 1 : 0;
+            lock_status[subwarp_idx] = curr_segment == 0xFFFFFFFFU ? 1 : 0;
         }
     }
     __syncthreads();
 
-    uint32_t match_mask, empty_mask;
+    uint32_t match_mask, empty_mask, zero_mask, lock_mask;
     if (tx >= 0 && tx < 14)
     {
         match_mask = __ballot_sync(__activemask(), match_status[tx]);
         empty_mask = __ballot_sync(__activemask(), empty_status[tx]);
+        zero_mask = __ballot_sync(__activemask(), zero_status[tx]);
+        lock_mask = __ballot_sync(__activemask(), lock_status[tx]);
     }
 
     if (tx == 0)
@@ -123,20 +135,25 @@ void GpuHashtable::simd_probe(uint32_t* window, const Compressed128Mer& key)
         int match_sub_block = __ffs(match_mask) - 1;
         int empty_sub_block = __ffs(empty_mask) - 1;
         //printf("Block %d: Determining match/free status\n", blockIdx.x);
-        if (match_sub_block >= 0)
+        if (lock_mask & zero_mask)
+        {
+            // Window must be probed again
+            status = ProbeStatus::PROBE_CURRENT;
+        }
+        else if (match_sub_block >= 0)
         {
             // match found, incrementing
             // deletions from hashtables not implemented
             // printf("Block %d: Match\n", blockIdx.x); 
             int offset = 9 * match_sub_block + 8;
-            atomicAdd(window + offset, 1UL);
+            atomicAdd((uint32_t*)window + offset, 1UL);
             status = ProbeStatus::SUCCEESS;
         }
         else if (empty_sub_block >= 0)
         {
             // printf("Block %d: Insert key\n", blockIdx.x); 
             // match not found, try insertion to available space
-            if (try_insert(window + 9 * empty_sub_block, key))
+            if (try_insert((uint32_t*)window + 9 * empty_sub_block, key))
             {
                 //printf("Block %d: Insert success\n", blockIdx.x); 
                 status = ProbeStatus::SUCCEESS;
@@ -262,11 +279,13 @@ void GpuHashtable::run()
 __device__ 
 bool GpuHashtable::try_insert(uint32_t* kv_pair, const Compressed128Mer& key)
 {
-    if (atomicCAS(kv_pair + 8, 0UL, 1UL) == 0)
+    if (atomicCAS(kv_pair + 8, 0, 0xFFFFFFFFU) == 0)
     {
         // sucessfully occupied the empty entry, copying keys
         for (int i = 0; i < 8; ++i)
             kv_pair[i] = key.u32[i];
+         __threadfence();
+        kv_pair[8] = 1UL;   // unlock
         return true;
     }
     else 

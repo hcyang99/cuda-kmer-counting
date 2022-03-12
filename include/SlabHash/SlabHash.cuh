@@ -174,6 +174,7 @@ void SlabHash::process(const Compressed128Mer& key)
                     for (int i = 0; i < 8; ++i)
                         new_slab[i] = key.u32[i];
                     new_slab[8] = 1UL;
+                     __threadfence();
 
                     // tries to append `new_slab` to end of current slab
                     uint32_t* old_next = (uint32_t*)atomicCAS((unsigned long long*)next_ptr, 0ULL, (uint64_t)new_slab);

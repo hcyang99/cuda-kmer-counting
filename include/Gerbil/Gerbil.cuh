@@ -9,7 +9,7 @@
 class Gerbil : public OAGpuHashtable
 {
     public:
-    Gerbil(uint32_t* ref, uint32_t* d, uint32_t n, JobQueue* j, uint32_t max_trials, FailureZone<Compressed128Mer>* f_zone)
+    __device__ Gerbil(uint32_t* ref, uint32_t* d, uint32_t n, JobQueue* j, uint32_t max_trials, FailureZone<Compressed128Mer>* f_zone)
         : OAGpuHashtable(ref, d, n, j), max_attempts(max_trials), failure_zone(f_zone) {}
 
     protected:
@@ -19,7 +19,7 @@ class Gerbil : public OAGpuHashtable
     /**
      * @brief Insert/increment the key in Gerbil
      */
-    virtual void process(const Compressed128Mer& key) override;
+    __device__ virtual void process(const Compressed128Mer& key) override;
 };
 
 
@@ -52,10 +52,6 @@ void Gerbil::process(const Compressed128Mer& key)
                 status = ProbeStatus::PROBE_CURRENT;
             }
             __syncthreads();
-        }
-        else 
-        {
-            assert(0);  // should not reach here
         }
     }
 
