@@ -2,7 +2,6 @@
 #include "GpuHashtable/GpuHashtable.cuh"
 #include "SlabHash/SlabPool.cuh"
 #include "utils/JobQueue.cuh"
-#include <assert.h>
 
 /**
  * @brief SlabHash, a separate chaining GPU hashtable, should be allocated on shared memory of each block

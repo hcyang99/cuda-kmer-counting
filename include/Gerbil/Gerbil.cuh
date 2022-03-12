@@ -48,7 +48,7 @@ void Gerbil::process(const Compressed128Mer& key)
             ++current_probe_count;
             if (tx == 0)
             {
-                uint32_t* next_pos = get_next_probe_pos(key);
+                probe_pos = get_next_probe_pos(current_probe_count);
                 status = ProbeStatus::PROBE_CURRENT;
             }
             __syncthreads();

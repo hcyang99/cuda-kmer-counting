@@ -31,6 +31,10 @@ class GpuHashtable
 
     /**
      * @brief Protected constructor prevents instantiation; Derived classes should reside on shared memory
+     * @param ref The compressed input sequence to be counted
+     * @param d Pointer to underlying hashtable data structure (buckets)
+     * @param n Number of buckets
+     * @param j The JobQueue object for job dispatching
      */
     __device__ GpuHashtable(uint32_t* ref, uint32_t* d, uint32_t n, JobQueue* j)
         : reference(ref), data(d), num_buckets(n), job_queue(j), job_begin(0), job_end(0),
@@ -56,7 +60,7 @@ class GpuHashtable
      * @param key The query key
      * @return 
      */
-    __device__ void simd_probe(uint32_t* data, const Compressed128Mer& key);
+    __device__ void simd_probe(uint32_t* window, const Compressed128Mer& key);
 
     /**
      * @brief Tries to insert new key into hashtable; should only be called from thread 0 of each block
@@ -73,7 +77,7 @@ class GpuHashtable
 
 
 __device__
-void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
+void GpuHashtable::simd_probe(uint32_t* window, const Compressed128Mer& key)
 {
     int tx = threadIdx.x;
     int subwarp_idx = tx / 9;  // 14 (32B key, 4B value) pairs
@@ -92,14 +96,14 @@ void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
     {
         if (sub_tx != 8)
         {
-            if (data[tx] != key.u32[sub_tx])
+            if (window[tx] != key.u32[sub_tx])
             {
                 match_status[subwarp_idx] = 0;  // set to 0 if not matching
             }
         }
         else
         {
-            empty_status[subwarp_idx] = data[tx] == 0 ? 1UL : 0;
+            empty_status[subwarp_idx] = window[tx] == 0 ? 1UL : 0;
         }
     }
     __syncthreads();
@@ -123,16 +127,16 @@ void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
         {
             // match found, incrementing
             // deletions from hashtables not implemented
-            //printf("Block %d: Match\n", blockIdx.x); 
+            // printf("Block %d: Match\n", blockIdx.x); 
             int offset = 9 * match_sub_block + 8;
-            atomicAdd(data + offset, 1UL);
+            atomicAdd(window + offset, 1UL);
             status = ProbeStatus::SUCCEESS;
         }
         else if (empty_sub_block >= 0)
         {
-            //printf("Block %d: Insert key\n", blockIdx.x); 
+            // printf("Block %d: Insert key\n", blockIdx.x); 
             // match not found, try insertion to available space
-            if (try_insert(data + 9 * empty_sub_block, key))
+            if (try_insert(window + 9 * empty_sub_block, key))
             {
                 //printf("Block %d: Insert success\n", blockIdx.x); 
                 status = ProbeStatus::SUCCEESS;
