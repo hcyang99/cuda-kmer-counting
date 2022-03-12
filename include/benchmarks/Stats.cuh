@@ -50,10 +50,13 @@ Stats& Stats::operator+=(const Stats& other)
     {
         while (true)
         {
-            if (atomicCAS(&lock, 0UL, 1UL) == 0)
+            if (atomicCAS(&lock, 0, 1) == 0)
                 break;  // lock acquired
         }
     }
+
+    __syncthreads();
+
     for (int i = tx; i < 128; i += bs)
         buckets[i] += other.buckets[i];
     

@@ -76,25 +76,32 @@ __device__
 void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
 {
     int tx = threadIdx.x;
-    int subwarp_idx = tx / 14;  // 14 (32B key, 4B value) pairs
+    int subwarp_idx = tx / 9;  // 14 (32B key, 4B value) pairs
     int sub_tx = tx % 9;        // 8 threads process the key, 1 thread processes the value
     if (tx < 126)               // let the last 2 threads rest
+    {
         if (sub_tx == 0)   
         {
             match_status[subwarp_idx] = 1;  // initialize as matched
         }
+    }
+        
     __syncthreads();
 
     if (tx < 126)
+    {
         if (sub_tx != 8)
+        {
             if (data[tx] != key.u32[sub_tx])
             {
                 match_status[subwarp_idx] = 0;  // set to 0 if not matching
             }
+        }
         else
         {
-            empty_status[subwarp_idx] = data[tx] == 0;
+            empty_status[subwarp_idx] = data[tx] == 0 ? 1UL : 0;
         }
+    }
     __syncthreads();
 
     uint32_t match_mask, empty_mask;
@@ -106,33 +113,43 @@ void GpuHashtable::simd_probe(uint32_t* data, const Compressed128Mer& key)
 
     if (tx == 0)
     {
+        match_mask = match_mask & (~empty_mask);
         match_status[14] = match_mask;
         empty_status[14] = empty_mask;
         int match_sub_block = __ffs(match_mask) - 1;
         int empty_sub_block = __ffs(empty_mask) - 1;
+        //printf("Block %d: Determining match/free status\n", blockIdx.x);
         if (match_sub_block >= 0)
         {
             // match found, incrementing
             // deletions from hashtables not implemented
+            //printf("Block %d: Match\n", blockIdx.x); 
             int offset = 9 * match_sub_block + 8;
             atomicAdd(data + offset, 1UL);
             status = ProbeStatus::SUCCEESS;
         }
         else if (empty_sub_block >= 0)
         {
+            //printf("Block %d: Insert key\n", blockIdx.x); 
             // match not found, try insertion to available space
             if (try_insert(data + 9 * empty_sub_block, key))
             {
+                //printf("Block %d: Insert success\n", blockIdx.x); 
                 status = ProbeStatus::SUCCEESS;
             }
             else 
             {
+                //printf("Block %d: Insert failed\n", blockIdx.x); 
                 // insertion failed; probe current window again
                 status = ProbeStatus::PROBE_CURRENT;
             }
         } 
         else 
+        {
+            //printf("Block %d: No match or free space, goto next window\n", blockIdx.x); 
             status = ProbeStatus::PROBE_NEXT;   // no match or space; goto next window
+        }
+            
     }
     __syncthreads();
 }

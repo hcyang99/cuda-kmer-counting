@@ -48,27 +48,56 @@ void SlabHash::get_new_pool(uint32_t seed)
 
     for (int i = tx; i < gs; i += bs)
     {
-        uint32_t is_curr_pool_full = all_slab_pools[i].full();
-        uint32_t full_pool_mask = __ballot_sync(__activemask(), is_curr_pool_full);
-        if (tx % 32 == 0)
+        if (tx % 32 == 0 && mem_pool == nullptr)
         {
-            int num_free = __clz(full_pool_mask);   // count number of non-filled pools
-            if (num_free != 0)
+            size_t max_available_size[3] = {0, 0, 0};
+            int max_available_idx[3] = {-1, -1, -1};
+            for (int j = i; j < i + 32 && j < gs; ++j)
             {
-                int selected_zero_bit = seed % num_free;
-                full_pool_mask = ~full_pool_mask;
-                for (int j = 0; j < selected_zero_bit; ++j)
+                size_t curr_space = all_slab_pools[j].space();
+                if (curr_space > max_available_size[0])
                 {
-                    uint32_t flip_mask = 1UL << (__ffs(full_pool_mask) - 1);
-                    full_pool_mask ^= flip_mask;    // flip first `selected_zero_bit` bits of 1
+                    max_available_size[2] = max_available_size[1];
+                    max_available_size[1] = max_available_size[0];
+                    max_available_size[0] = curr_space;
+
+                    max_available_idx[2] = max_available_idx[1];
+                    max_available_idx[1] = max_available_idx[0];
+                    max_available_idx[0] = j;
                 }
-                int selected_offset = __ffs(full_pool_mask) - 1;
-                if (selected_offset >= 0)
+                else if (curr_space > max_available_size[1])
                 {
-                    int selected = i - i % 32 + selected_offset;
-                    if (mem_pool == nullptr)
-                        mem_pool = all_slab_pools + selected;
+                    max_available_size[2] = max_available_size[1];
+                    max_available_size[1] = curr_space;
+
+                    max_available_idx[2] = max_available_idx[1];
+                    max_available_idx[1] = j;
                 }
+                else if (curr_space > max_available_size[2])
+                {
+                    max_available_size[2] = curr_space;
+                    max_available_idx[2] = j;
+                }
+            }
+
+            int selected = -1;
+            if (max_available_idx[2] >= 0)
+            {
+                selected = max_available_idx[seed % 1001 % 3];
+            }
+            else if (max_available_idx[1] >= 0)
+            {
+                selected = max_available_idx[seed % 1001 % 2];
+            }
+            else if (max_available_idx[0] >= 0)
+            {
+                selected = max_available_idx[0];
+            }
+
+            if (selected >= 0 && mem_pool == nullptr)
+            {
+                mem_pool = all_slab_pools + selected;
+                // printf("Block: %d, Thread: %d, selected = %d\n", blockIdx.x, threadIdx.x, selected);
             }
         }
     }
@@ -111,9 +140,13 @@ void SlabHash::process(const Compressed128Mer& key)
     while (true)
     {
         if (status == ProbeStatus::PROBE_CURRENT)
+        {
             simd_probe(probe_pos, key);
+        } 
         else if (status == ProbeStatus::SUCCEESS)
+        {
             return;
+        }
         else if (status == ProbeStatus::PROBE_NEXT)
         {
             // no empty space in current slab
@@ -123,6 +156,7 @@ void SlabHash::process(const Compressed128Mer& key)
             {
                 if (tx == 0)
                 {
+                    // printf("Block %d: Moving to next slab: %p\n", blockIdx.x, next); 
                     probe_pos = next;
                     status = ProbeStatus::PROBE_CURRENT;
                 }
@@ -137,31 +171,30 @@ void SlabHash::process(const Compressed128Mer& key)
                 if (tx == 0)
                 {
                     // writes key, value into head of new slab
+                    // printf("Block %d: Using allocated Slab %p\n", blockIdx.x, new_slab); 
                     for (int i = 0; i < 8; ++i)
                         new_slab[i] = key.u32[i];
                     new_slab[8] = 1UL;
 
                     // tries to append `new_slab` to end of current slab
-                    uint32_t* old_next = (uint32_t*)atomicCAS((unsigned long long*)next_ptr, 0ULL, (uint64_t)next_ptr);
+                    uint32_t* old_next = (uint32_t*)atomicCAS((unsigned long long*)next_ptr, 0ULL, (uint64_t)new_slab);
                     if (old_next == nullptr)
                     {
                         // slab insertion success
+                        // printf("Block %d: Successfully inserted new slab %p\n", blockIdx.x, new_slab); 
                         new_slab = nullptr;
                         status = ProbeStatus::SUCCEESS;
                     }
                     else 
                     {
                         // slab insertion failed
+                        // printf("Block %d: Failed to insert new slab\n", blockIdx.x); 
                         probe_pos = old_next;
                         status = ProbeStatus::PROBE_CURRENT;
                     }
                 }
                 __syncthreads();
             }
-        }
-        else 
-        {
-            assert(0);  // should not reach here
         }
     }
 }

@@ -19,11 +19,11 @@ class Fasta
      */
     uint32_t* toGpuCompressed();
 
-    uint32_t size() const {return sz;}
+    size_t size() const {return sz;}
 
     protected:
     std::string buffer;
-    uint32_t sz;
+    size_t sz;
 };
 
 __host__ 
@@ -86,11 +86,12 @@ uint32_t compress16(char* s)
  * @param src Source string buffer
  */
 __global__
-void compressKernel(uint32_t* dst, uint32_t* src)
+void compressKernel(uint32_t* dst, uint32_t* src, uint32_t num_outs)
 {
     char* src_char = reinterpret_cast<char*>(src);
     int tx = utils::global_thread_id();
-    dst[tx] = compress16(src_char + 16 * tx);
+    if (tx < num_outs)
+        dst[tx] = compress16(src_char + 16 * tx);
 }
 
 __host__
@@ -102,7 +103,7 @@ uint32_t* Fasta::toGpuCompressed()
     CUDA_CHECK_ERROR(cudaMalloc(&d_compressed, this->buffer.size() / 4));
     CUDA_CHECK_ERROR(cudaMemcpy(d_buf, &this->buffer[0], this->buffer.size(), cudaMemcpyHostToDevice));
 
-    compressKernel<<<this->buffer.size() / 4 / utils::blockSize(), utils::blockSize()>>>(d_compressed, d_buf);
+    compressKernel<<<this->buffer.size() / 4 / utils::blockSize() + 1, utils::blockSize()>>>(d_compressed, d_buf, this->buffer.size() / 16);
 
     cudaFree(d_buf);
     this->buffer.clear();

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <iostream>
+#include <stdio.h>
 
 #define CUDA_CHECK_ERROR(x) do {auto err = x; if (err != cudaSuccess) {std::cerr << "CUDA Error: " << cudaGetErrorString(err) << " at " << __FILE__ << ", " << __LINE__ << std::endl; std::exit(1);}} while (0)
 
@@ -25,7 +26,7 @@ namespace utils
     __host__ 
     int gridSize()
     {
-        return 256;
+        return 128;
     }
 
     __host__ 

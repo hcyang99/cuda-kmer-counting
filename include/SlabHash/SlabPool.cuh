@@ -7,7 +7,7 @@
 class SlabPool
 {
     public:
-    __device__ SlabPool(uint32_t* buf, uint32_t sz)
+    __device__ SlabPool(uint32_t* buf, size_t sz)
         : mem(buf), mem_pool_head(0), mem_pool_size(sz) {}
 
     /**
@@ -17,27 +17,27 @@ class SlabPool
     __device__ uint32_t* allocate();
 
     /**
-     * @return True if current pool is full
+     * @return Avaiable space 
      */
-    __device__ bool full() const;
+    __device__ size_t space() const;
 
     protected:
     uint32_t* mem;              // Pool's buffer
-    uint32_t mem_pool_head;     // Pool's head (in uint32_t)
-    uint32_t mem_pool_size;     // Pool's size (in uint32_t)
+    size_t mem_pool_head;       // Pool's head (in uint32_t)
+    size_t mem_pool_size;       // Pool's size (in uint32_t)
 };
 
 __device__ 
 uint32_t* SlabPool::allocate()
 {
-    uint32_t old_head = atomicAdd(&mem_pool_head, 128UL);
+    size_t old_head = atomicAdd((unsigned long long*)&mem_pool_head, 128UL);
     if (old_head >= mem_pool_size)
         return nullptr;     // allocation failed: out of memory
     return mem + old_head;
 }
 
 __device__ 
-bool SlabPool::full() const
+size_t SlabPool::space() const
 {
-    return mem_pool_head < mem_pool_size;
+    return mem_pool_head >= mem_pool_size ? 0 : mem_pool_size - mem_pool_head;
 }
