@@ -7,10 +7,11 @@ find_package(CUDA 10.2 REQUIRED)
 
 project(xact-build LANGUAGES CUDA)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_52")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70")
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
-add_executable(slab src/slab.cu)
-add_executable(wc src/wc.cu)
-add_executable(gerbil src/gerbil.cu)
+add_executable(info src/info.cu src/utils/utils.cu)
+add_executable(slab src/slab.cu src/utils/utils.cu)
+add_executable(wc src/wc.cu src/utils/utils.cu)
+add_executable(gerbil src/gerbil.cu src/utils/utils.cu)

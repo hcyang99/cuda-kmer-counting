@@ -1,6 +1,8 @@
 #pragma once
+#include <cstdlib>
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <stdio.h>
 #include <assert.h>
 
@@ -8,7 +10,7 @@
 
 namespace utils
 {
-    __device__ 
+    __device__ __forceinline__ 
     int global_thread_id()
     {
         int tx = threadIdx.x;
@@ -18,35 +20,50 @@ namespace utils
         return tx + bx * bs;
     }
 
-    __host__ 
-    int blockSize()
+    class BlockSize
     {
-        return 128;
-    }
+        static int value;
 
-    __host__ 
-    int gridSize()
-    {
-        return 128;
-    }
+        public:
+        static int get();
+        static void set(int v);
+    };
 
-    __host__ 
-    int batchSize()
+    class GridSize
     {
-        return 128;
-    }
+        static int value;
 
-    __host__ 
-    float slabFactor()
-    {
-        return 0.05;
-    }
+        public:
+        static int get();
+        static void set(int v);
+    };
 
-    __host__ 
-    float OAFactor()
+    class BatchSize
     {
-        return 2.0;
-    }
+        static int value;
+
+        public:
+        static int get();
+        static void set(int v);
+    };
+
+    class SlabFactor
+    {
+        static float value;
+
+        public:
+        static float get();
+        static void set(int v);
+    };
+
+    class OAFactor
+    {
+        static float value;
+
+        public:
+        static float get();
+        static void set(int v);
+    };
 
     // CUDA is little-endian
     union byte_32
@@ -54,9 +71,9 @@ namespace utils
         char c[32];
         uint32_t u32[8];
 
-        __device__ byte_32() : u32() {}
+        __device__ __forceinline__ byte_32() : u32() {}
 
-        __device__
+        __device__ __forceinline__
         bool operator==(const byte_32& other) const
         {
             for (int i = 0; i < 8; ++i)
@@ -73,7 +90,7 @@ namespace utils
         char c[4];
         uint32_t u32;
 
-        __device__ byte_4() : u32() {}
+        __device__ __forceinline__ byte_4() : u32() {}
     };
 
     using Compressed128Mer = byte_32;
@@ -84,7 +101,7 @@ namespace utils
      * @param offset
      * @param out the 128Mer
      */
-    __device__ 
+    __device__ __forceinline__ 
     void Read128Mer(uint32_t* data, uint32_t offset, Compressed128Mer& out)
     {
         int tx = threadIdx.x;
@@ -98,32 +115,6 @@ namespace utils
         __syncthreads();
     }
 
-    void printGpuProperties () {
-    int nDevices;
-
-    // Store the number of available GPU device in nDevicess
-    cudaError_t err = cudaGetDeviceCount(&nDevices);
-
-    if (err != cudaSuccess) {
-        fprintf(stderr, "GPU_ERROR: cudaGetDeviceCount failed!\n");
-        exit(1);
-    }
-
-    // For each GPU device found, print the information (memory, bandwidth etc.)
-    // about the device
-    for (int i = 0; i < nDevices; i++) {
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, i);
-        printf("Device Number: %d\n", i);
-        printf("  Device name: %s\n", prop.name);
-        printf("  Device memory: %lu\n", prop.totalGlobalMem);
-        printf("  Memory Clock Rate (KHz): %d\n",
-               prop.memoryClockRate);
-        printf("  Memory Bus Width (bits): %d\n",
-               prop.memoryBusWidth);
-        printf("  Peak Memory Bandwidth (GB/s): %f\n",
-               2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
-    }
-}
+    void printGpuProperties();
 }
 

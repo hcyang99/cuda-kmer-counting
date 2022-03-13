@@ -103,7 +103,7 @@ uint32_t* Fasta::toGpuCompressed()
     CUDA_CHECK_ERROR(cudaMalloc(&d_compressed, this->buffer.size() / 4));
     CUDA_CHECK_ERROR(cudaMemcpy(d_buf, &this->buffer[0], this->buffer.size(), cudaMemcpyHostToDevice));
 
-    compressKernel<<<this->buffer.size() / 4 / utils::blockSize() + 1, utils::blockSize()>>>(d_compressed, d_buf, this->buffer.size() / 16);
+    compressKernel<<<this->buffer.size() / 4 / utils::BlockSize::get() + 1, utils::BlockSize::get()>>>(d_compressed, d_buf, this->buffer.size() / 16);
 
     cudaFree(d_buf);
     this->buffer.clear();

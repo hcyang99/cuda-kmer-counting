@@ -129,9 +129,9 @@ void hashtable_walk_kernel(uint32_t* table, Stats* global_stats, JobQueue* j)
 __host__
 void hashtable_walk(uint32_t* table, uint32_t num_buckets, uint32_t* out)
 {
-    JobQueue* d_jobs = new_job(num_buckets, utils::batchSize());
+    JobQueue* d_jobs = new_job(num_buckets, utils::BatchSize::get());
     Stats* d_stats = new_stats();
-    hashtable_walk_kernel<<<utils::gridSize(), 32>>>(table, d_stats, d_jobs);
+    hashtable_walk_kernel<<<utils::GridSize::get(), 32>>>(table, d_stats, d_jobs);
     CUDA_CHECK_ERROR(cudaMemcpy(out, (uint32_t*)d_stats, 128 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
     CUDA_CHECK_ERROR(cudaFree(d_jobs));
     CUDA_CHECK_ERROR(cudaFree(d_stats));
@@ -140,9 +140,9 @@ void hashtable_walk(uint32_t* table, uint32_t num_buckets, uint32_t* out)
 __host__
 Stats* hashtable_walk(uint32_t* table, uint32_t num_buckets)
 {
-    JobQueue* d_jobs = new_job(num_buckets, utils::batchSize());
+    JobQueue* d_jobs = new_job(num_buckets, utils::BatchSize::get());
     Stats* d_stats = new_stats();
-    hashtable_walk_kernel<<<utils::gridSize(), 32>>>(table, d_stats, d_jobs);
+    hashtable_walk_kernel<<<utils::GridSize::get(), 32>>>(table, d_stats, d_jobs);
     CUDA_CHECK_ERROR(cudaFree(d_jobs));
     return d_stats;
 }

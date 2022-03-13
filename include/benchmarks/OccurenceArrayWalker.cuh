@@ -93,7 +93,7 @@ __host__
 void occurence_table_walk(uint32_t* array, size_t size, Stats* stats, uint32_t* out)
 {
     JobQueue* d_jobs = new_job(size, 2048);
-    occurence_array_walk_kernel<<<1, 32>>>
+    occurence_array_walk_kernel<<<utils::GridSize::get(), utils::BlockSize::get()>>>
         (array, stats, d_jobs);
     CUDA_CHECK_ERROR(cudaMemcpy(out, (uint32_t*)stats, 128 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
     CUDA_CHECK_ERROR(cudaFree(d_jobs));

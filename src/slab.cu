@@ -1,6 +1,7 @@
 #include "SlabHash/SlabHash.cuh"
 #include "benchmarks/HashtableWalker.cuh"
 #include "utils/Fasta.cuh"
+#include <chrono>
 using namespace std;
 
 __global__ 
@@ -36,58 +37,77 @@ void create_slab_pools(SlabPool* loc, uint32_t* buf, size_t total_size)
 }
 
 __host__
-uint32_t* slab(uint32_t* ref, size_t n_bps, size_t& n_buckets_out)
+uint32_t* slab(uint32_t* ref, size_t n_bps, size_t& n_buckets_out, int64_t& us)
 {
     size_t n_jobs = n_bps - 127;
-    JobQueue* j = new_job(n_jobs, utils::batchSize());
-    size_t num_buckets = n_jobs * utils::slabFactor() / 14;
-    size_t num_slabs = (n_jobs / 14 / utils::gridSize() + 1) * utils::gridSize();
+    JobQueue* j = new_job(n_jobs, utils::BatchSize::get());
+    size_t num_buckets = n_jobs * utils::SlabFactor::get() / 14;
+    size_t num_slabs = (n_jobs / 14 / utils::GridSize::get() + 1) * utils::GridSize::get();
 
     uint32_t* d_buf;
     uint32_t* d_slab_buf;
     SlabPool* d_slab_pools;
-    cerr << "Allocating " << num_buckets << " buckets" << endl;
-    cerr << "Allocating " << num_slabs << " slabs" << endl;
+    // cerr << "Allocating " << num_buckets << " buckets" << endl;
+    // cerr << "Allocating " << num_slabs << " slabs" << endl;
 
     CUDA_CHECK_ERROR(cudaMalloc(&d_buf, num_buckets * 512));
     CUDA_CHECK_ERROR(cudaMalloc(&d_slab_buf, num_slabs * 512 * 2));
-    CUDA_CHECK_ERROR(cudaMalloc(&d_slab_pools, utils::gridSize() * sizeof(SlabPool)));
+    CUDA_CHECK_ERROR(cudaMalloc(&d_slab_pools, utils::GridSize::get() * sizeof(SlabPool)));
     CUDA_CHECK_ERROR(cudaMemset(d_buf, 0, num_buckets * 512));
     CUDA_CHECK_ERROR(cudaMemset(d_slab_buf, 0, num_slabs * 512 * 2));
 
-    cerr << "Allocated memory for slabs: " << d_slab_buf << " to " << d_slab_buf + num_slabs * 128 << endl;
+    // cerr << "Allocated memory for slabs: " << d_slab_buf << " to " << d_slab_buf + num_slabs * 128 << endl;
+    CUDA_CHECK_ERROR(cudaDeviceSynchronize());
+    auto t1 = chrono::high_resolution_clock::now();
 
-    create_slab_pools<<<utils::gridSize(), 32>>>
+    create_slab_pools<<<utils::GridSize::get(), 32>>>
         (d_slab_pools, d_slab_buf, num_slabs * 512);
 
-    CUDA_CHECK_ERROR(cudaDeviceSynchronize());
+    // CUDA_CHECK_ERROR(cudaDeviceSynchronize());
     
-    slab_kernel<<<utils::gridSize(), utils::blockSize()>>>
+    slab_kernel<<<utils::GridSize::get(), utils::BlockSize::get()>>>
         (ref, d_buf, num_buckets, j, d_slab_pools);
 
     CUDA_CHECK_ERROR(cudaDeviceSynchronize());
+    auto t2 = chrono::high_resolution_clock::now();
+
+    us = chrono::duration_cast<chrono::microseconds>(t2 - t1).count();
 
     n_buckets_out = num_buckets;
     return d_buf;
 }
 
-int main()
+int main(int argc, char** argv)
 {
-    utils::printGpuProperties();
+    if (argc != 3)
+    {
+        cerr << "Usage: " << argv[0] << " <path-to-fasta> <slab-factor>" << endl;
+        exit(1);
+    }
+
+    string path(argv[1]);
+    float slab_factor = strtof(argv[2], nullptr);
 
     uint32_t result[128];
-    Fasta fasta("data/cut.fa");
-    cerr << "Reading " << fasta.size() << " base pairs" << endl;
+    Fasta fasta(path);
+    // cerr << "Reading " << fasta.size() << " base pairs" << endl;
+
+    int64_t us_run, us_walk;
 
     uint32_t* d_ref = fasta.toGpuCompressed();
     size_t num_buckets;
-    uint32_t* d_table_buf = slab(d_ref, fasta.size(), num_buckets);
+    uint32_t* d_table_buf = slab(d_ref, fasta.size(), num_buckets, us_run);
 
-    cerr << "Walking through " << num_buckets << " buckets" << endl;
+    cout << "slab (" << slab_factor << ") Insertion Time: " << us_run << " us\n";
+
+    // cerr << "Walking through " << num_buckets << " buckets" << endl;
+
+    auto t1 = chrono::high_resolution_clock::now();
    
     hashtable_walk(d_table_buf, num_buckets, result);
-    for (int i = 1; i < 128; ++i)
-    {
-        cout << "result[" << i << "] = " << result[i] << endl;
-    }
+
+    auto t2 = chrono::high_resolution_clock::now();
+    us_walk = chrono::duration_cast<chrono::microseconds>(t2 - t1).count();
+
+    cout << "slab (" << slab_factor << ") Walk Time: " << us_walk << " us\n";
 }
