@@ -26,9 +26,7 @@ class GpuHashtable
     uint32_t* probe_pos;
     uint32_t match_status[15];          // Indicates matches of 14 sub-warps
     uint32_t empty_status[15];          // Value residing in shared memory, for empty status of 14 sub-warps
-    uint32_t zero_status[15];           // Indicates if each key in the table contains a 32-bit zero segment
     uint32_t lock_status[15];           // Indicates if key-value pairs in table are locked (value == 0xFFFFFFFFU)
-    // Note: if zero_status[i] && lock_status[i] evalucates into true for any 0 <= i < 14, current window should be probed again
 
     Compressed128Mer current_key;
 
@@ -90,7 +88,6 @@ void GpuHashtable::simd_probe(volatile uint32_t* window, const Compressed128Mer&
         if (sub_tx == 0)   
         {
             match_status[subwarp_idx] = 1;  // initialize as matched
-            zero_status[subwarp_idx] = 0;
         }
     }
         
@@ -105,10 +102,6 @@ void GpuHashtable::simd_probe(volatile uint32_t* window, const Compressed128Mer&
             {
                 match_status[subwarp_idx] = 0;  // set to 0 if not matching
             }
-            if (curr_segment == 0)
-            {
-                zero_status[subwarp_idx] = 1;
-            }
         }
         else
         {
@@ -118,12 +111,11 @@ void GpuHashtable::simd_probe(volatile uint32_t* window, const Compressed128Mer&
     }
     __syncthreads();
 
-    uint32_t match_mask, empty_mask, zero_mask, lock_mask;
+    uint32_t match_mask, empty_mask, lock_mask;
     if (tx >= 0 && tx < 14)
     {
         match_mask = __ballot_sync(__activemask(), match_status[tx]);
         empty_mask = __ballot_sync(__activemask(), empty_status[tx]);
-        zero_mask = __ballot_sync(__activemask(), zero_status[tx]);
         lock_mask = __ballot_sync(__activemask(), lock_status[tx]);
     }
 
@@ -135,7 +127,7 @@ void GpuHashtable::simd_probe(volatile uint32_t* window, const Compressed128Mer&
         int match_sub_block = __ffs(match_mask) - 1;
         int empty_sub_block = __ffs(empty_mask) - 1;
         //printf("Block %d: Determining match/free status\n", blockIdx.x);
-        if (lock_mask & zero_mask)
+        if (lock_mask)
         {
             // Window must be probed again
             status = ProbeStatus::PROBE_CURRENT;

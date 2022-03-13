@@ -3,7 +3,7 @@
 namespace utils
 {
     int utils::BlockSize::value = 128;
-    int utils::GridSize::value = 128;
+    int utils::GridSize::value = 56;
     int utils::BatchSize::value = 128;
     float utils::SlabFactor::value = 0.1;
     float utils::OAFactor::value = 2.0;

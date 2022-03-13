@@ -139,7 +139,7 @@ void process_failure_zone(FailureZone<Compressed128Mer>* f_zone, Stats* stats, u
     Compressed128Mer* end = f_zone_ptrs[2];
     size_t size = end - buffer;
 
-    // cerr << "Walking through " << size << " failed entries\n";
+    cout << "Walking through " << size << " failed entries\n";
 
     // Step 1: sort
     thrust::sort(thrust::device, buffer, end, KmerLess());

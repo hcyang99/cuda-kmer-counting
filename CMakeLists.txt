@@ -7,7 +7,7 @@ find_package(CUDA 10.2 REQUIRED)
 
 project(xact-build LANGUAGES CUDA)
 
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_52")
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
